@@ -1,147 +1,289 @@
 <template>
-    <div class="chunked-upload">
-        <div class="upload-zone" @click="openFilePicker">
-            <input
-                type="file"
-                ref="fileInput"
-                @change="handleFileSelect"
-                accept=".zip,.tar,.gz"
-                class="hidden"
-            />
-            <div v-if="!uploading">
-                <svg>...</svg>
-                <p>Drag & drop or click to upload</p>
-                <p class="hint">Supports chunked upload for large files</p>
-            </div>
-
-            <div v-else class="progress-container">
-                <div class="progress-bar">
-                    <div
-                        class="progress-fill"
-                        :style="{ width: `${progress}%` }"
-                    ></div>
-                </div>
-                <div class="progress-info">
-                    <span>{{ progress }}%</span>
-                    <span v-if="speed">{{ formatBytes(speed) }}/s</span>
-                    <button @click="cancel" class="cancel-btn">Cancel</button>
-                </div>
-            </div>
-        </div>
-
-        <div v-if="status" class="status">
-            <h4>Status: {{ status.status }}</h4>
-            <div v-if="status.progress < 100">
-                <p>
-                    Chunks: {{ status.uploaded_chunks }} /
-                    {{ status.total_chunks }}
-                </p>
-                <button @click="checkStatus" class="btn">Refresh</button>
-            </div>
-            <div v-else-if="status.job_id">
-                <p>Processing ZIP... Job ID: {{ status.job_id }}</p>
-                <button @click="checkStatus" class="btn">Check Status</button>
-            </div>
-        </div>
+  <div class="upload-manager">
+    <!-- Status Environment -->
+    <div class="env-badge" :class="envClass">
+      <span>Environment: {{ environment }}</span>
+      <span>Strategy: {{ strategy }}</span>
     </div>
+
+    <!-- Upload Zone -->
+    <div class="upload-zone" @dragover.prevent @drop.prevent="handleDrop" @click="openFilePicker">
+      <div v-if="!uploading">
+        <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none"
+          stroke="currentColor">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+          <polyline points="17 8 12 3 7 8"></polyline>
+          <line x1="12" y1="3" x2="12" y2="15"></line>
+        </svg>
+        <p>Drag & drop ZIP file here</p>
+        <p class="hint">or click to browse</p>
+        <p class="limits">Max: {{ formatBytes(maxSize) }} • ZIP only</p>
+      </div>
+
+      <!-- Progress -->
+      <div v-else class="progress-container">
+        <div class="progress-bar">
+          <div class="progress-fill" :style="{ width: `${progress}%` }"></div>
+        </div>
+        <div class="progress-info">
+          <span>{{ progress }}%</span>
+          <span v-if="speed">{{ formatBytes(speed) }}/s</span>
+          <button @click="pauseResume" class="control-btn">
+            {{ isPaused ? "Resume" : "Pause" }}
+          </button>
+          <button @click="cancel" class="control-btn cancel">
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Results -->
+    <div v-if="result" class="result" :class="result.type">
+      <div class="result-icon">
+        <svg v-if="result.type === 'success'" xmlns="http://www.w3.org/2000/svg" width="24" height="24"
+          viewBox="0 0 24 24" fill="none" stroke="currentColor">
+          <polyline points="20 6 9 17 4 12"></polyline>
+        </svg>
+        <svg v-else xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
+          stroke="currentColor">
+          <circle cx="12" cy="12" r="10"></circle>
+          <line x1="12" y1="8" x2="12" y2="12"></line>
+          <line x1="12" y1="16" x2="12.01" y2="16"></line>
+        </svg>
+      </div>
+      <div class="result-content">
+        <h3>{{ result.title }}</h3>
+        <p>{{ result.message }}</p>
+        <div v-if="result.jobId" class="job-info">
+          <span>Job ID: {{ result.jobId }}</span>
+          <button @click="checkStatus" class="btn-sm">
+            Check Status
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Hidden file input -->
+    <input type="file" ref="fileInput" @change="handleFileSelect($event as InputEvent)" accept=".zip,.tar,.gz"
+      class="hidden" />
+  </div>
 </template>
 
-<script setup lang="ts">
-import { ref, onMounted } from "vue";
-import { ChunkedUploadManager } from "./ChunkUploadManager";
+<script setup
+        lang="ts">
+        import { ref, onMounted, computed } from "vue";
+        import {
+          ChunkedUploadManager,
+          EndData,
+          ErrorData,
+          ProgressData,
+        } from "./ChunkUploadManager";
 
-const fileInput = ref(null);
-const uploading = ref(false);
-const progress = ref(0);
-const speed = ref(0);
-const status = ref(null);
-const uploadManager = new ChunkedUploadManager();
+        const environment = ref("detecting...");
+        const envClass = computed(() => ({
+          "env-shared": environment.value === "shared",
+          "env-dedicated": environment.value === "dedicated",
+          "env-container": environment.value === "container",
+        }));
 
-onMounted(async () => {
-    await uploadManager.initialize();
-});
+        const fileInput = ref<HTMLElement | null>(null);
+        const strategy = ref<string>("auto");
+        const result = ref<null | {
+          type: string;
+          title: string;
+          message: string;
+          jobId?: string;
+        }>(null);
+        const maxSize = ref<number>(0);
+        const uploading = ref(false);
+        const isPaused = ref(false);
+        const progress = ref(0);
+        const startTime = ref<number | null>(null);
+        const uploadedBytes = ref(0);
 
-const openFilePicker = () => {
-    fileInput.value.click();
-};
+        const speed = ref(0);
+        // const status = ref(null);
+        const uploadManager = new ChunkedUploadManager();
 
-const handleFileSelect = async (event) => {
-    const files = event.target.files
-    if (files.length === 0) return
-    const file = files[0]
-    await startUpload(file)
-    event.target.value = ''
-};
+        onMounted(async () => {
+          uploadManager.onStart = handleStart;
+          uploadManager.onProgress = handleProgress;
+          uploadManager.onEnd = handleUploadComplete;
+          uploadManager.onError = handleError;
 
-const startUpload = async (file) => {
-    uploading.value = true;
-    progress.value = 0;
-    speed.value = 0;
-    status.value = null;
+          await uploadManager.initialize();
+          strategy.value = uploadManager.config().driver;
+          maxSize.value = uploadManager.config().max_size;
+        });
 
-    uploadManager.onProgress = (data) => {
-        progress.value = Math.round(data.progress * 100);
-        // Hitung speed
-        if (data.chunkIndex > 0) {
-            const chunkSize =
-                data.uploaded -
-                data.chunkIndex * uploadManager.config.chunk_size;
-            speed.value = chunkSize / 1000; // KB/s
-        }
-    };
+        const openFilePicker = () => {
+          fileInput.value!.click();
+        };
 
-    try {
-        const uploadId = await uploadManager.upload(file);
-        await pollStatus(uploadId);
-    } catch (error) {
-        console.error("Upload failed:", error);
-        alert(`Upload failed: ${error.message}`);
-    } finally {
-        uploading.value = false;
-    }
-};
+        const handleFileSelect = async (event: InputEvent) => {
+          const files = (event.target as HTMLInputElement).files!;
+          if (files.length === 0) return;
+          // const file = files[0];
+          await processFiles(files);
+          (event.target as HTMLInputElement).value = "";
+        };
 
-const pollStatus = async (uploadId) => {
-    const interval = setInterval(async () => {
-        try {
-            const stat = await uploadManager.getStatus(uploadId);
-            status.value = stat;
+        const handleDrop = (event: DragEvent) => {
+          const filelist = event.dataTransfer?.files;
+          const files = Array.from(filelist!);
+          processFiles(files);
+        };
 
-            if (stat.status === "completed" || stat.error) {
-                clearInterval(interval);
-            }
-        } catch (error) {
-            console.error("Status check failed:", error);
-            clearInterval(interval);
-        }
-    }, 2000);
-};
+        const handleStart = () => {
+          uploading.value = true;
+          isPaused.value = false;
+          progress.value = 0;
+          speed.value = 0;
+          uploadedBytes.value = 0;
+          startTime.value = Date.now();
+          result.value = null;
+        };
 
-const cancel = () => {
-    uploadManager.cancel();
-    uploading.value = false;
-};
+        const handleProgress = (data: ProgressData) => {
+          const percentage = (data.uploadedSize / data.totalBytes) * 100;
+          // const percentage = ((data.chunkIndex + 1) / data.totalChunks) * 100
+          progress.value = Math.round(percentage);
+          const bytesUploaded = data.uploadedSize;
 
-const checkStatus = async () => {
-    if (status.value?.id) {
-        status.value = await uploadManager.getStatus(status.value.id);
-    }
-};
+          // Calculate speed
+          const now = Date.now();
+          const elapsed = (now - startTime.value!) / 1000; // seconds
+          if (elapsed > 1) {
+            speed.value =
+              ((bytesUploaded - uploadedBytes.value) / (now - startTime.value!)) *
+              1000;
+            uploadedBytes.value = bytesUploaded;
+          }
+        };
 
-const formatBytes = (bytes) => {
-    if (bytes === 0) return "0 Bytes";
-    const k = 1024;
-    const sizes = ["Bytes", "KB", "MB", "GB"];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
-};
+        const handleUploadComplete = (data: EndData) => {
+          uploading.value = false;
+          result.value = {
+            type: data.status
+              ? data.status === "error"
+                ? data.status
+                : "success"
+              : "success",
+            title: "Upload Completed",
+            message: `${data.fileName} is ${data.status}.`,
+            jobId: data.jobId,
+          };
+        };
+
+        const handleError = (data: ErrorData) => {
+          handleProgress(data as ProgressData);
+          handleUploadComplete({
+            fileName: data.fileName,
+            uploadId: data.uploadId,
+            totalChunks: data.totalChunks,
+            totalBytes: data.totalBytes,
+            jobId: "0",
+            status: data.status,
+            url: "",
+          });
+        };
+
+        const pauseResume = () => {
+          if (isPaused.value) {
+            uploadManager.resume();
+            isPaused.value = false;
+          } else {
+            uploadManager.pause();
+            isPaused.value = true;
+          }
+        };
+
+        const processFiles = async (files: FileList | Array<File>) => {
+          if (files.length === 0) return;
+
+          const file = files[0];
+
+          // Validate file
+          if (
+            !file.name.toLowerCase().endsWith(".zip") &&
+            !file.name.toLowerCase().endsWith(".tar") &&
+            !file.name.toLowerCase().endsWith(".gz")
+          ) {
+            showError("Invalid file type", "Only ZIP, TAR, GZ files allowed");
+            return;
+          }
+
+          if (file.size > maxSize.value) {
+            showError("File too large", `Max size: ${formatBytes(maxSize.value)}`);
+            return;
+          }
+
+          let uploadId:string;
+          try {
+            uploadId = await uploadManager.upload(file);
+            await pollStatus(uploadId);
+          } catch (error) {
+            showError("Upload failed", (error as Error).message);
+          }
+        };
+        
+        const showError = (title: string, message: string) => {
+          result.value = { type: "error", title, message, jobId: "" };
+        };
+
+        // const upload = async (file: File): Promise<string> => {
+        //   try {
+        //     return await uploadManager.upload(file); // uploadId
+        //     // await pollStatus(uploadId);
+        //   } catch (error) {
+        //     console.error("Upload failed:", error);
+        //     alert(`Upload failed: ${(error as Error).message}`);
+        //     throw error;
+        //   }
+        // };
+
+        const pollStatus = async (uploadId: string) => {
+          // const interval = setInterval(async () => {
+          //     try {
+          //         const stat = await uploadManager.getStatus(uploadId);
+          //         status.value = stat;
+          //         if (stat.status === "completed" || stat.error) {
+          //             clearInterval(interval);
+          //         }
+          //     } catch (error) {
+          //         console.error("Status check failed:", error);
+          //         clearInterval(interval);
+          //     }
+          // }, 2000);
+        };
+
+        const cancel = () => {
+          uploadManager.cancel();
+          uploading.value = false;
+        };
+
+        const checkStatus = async () => {
+          // if (status.value?.id) {
+          //     status.value = await uploadManager.getStatus(status.value.id);
+          // }
+        };
+
+        const formatBytes = (bytes: number) => {
+          if (bytes === 0) return "0 Bytes";
+          const k = 1024;
+          const sizes = ["Bytes", "KB", "MB", "GB"];
+          const i = Math.floor(Math.log(bytes) / Math.log(k));
+          return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
+        };
 </script>
 
 <style scoped>
 .upload-manager {
   max-width: 600px;
   margin: 2rem auto;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    sans-serif;
 }
 
 .env-badge {
@@ -155,9 +297,20 @@ const formatBytes = (bytes) => {
   justify-content: center;
 }
 
-.env-shared { background: #fff3cd; border-left: 4px solid #ffc107; }
-.env-dedicated { background: #d4edda; border-left: 4px solid #28a745; }
-.env-container { background: #cce5ff; border-left: 4px solid #007bff; }
+.env-shared {
+  background: #fff3cd;
+  border-left: 4px solid #ffc107;
+}
+
+.env-dedicated {
+  background: #d4edda;
+  border-left: 4px solid #28a745;
+}
+
+.env-container {
+  background: #cce5ff;
+  border-left: 4px solid #007bff;
+}
 
 .upload-zone {
   border: 2px dashed #ccc;
