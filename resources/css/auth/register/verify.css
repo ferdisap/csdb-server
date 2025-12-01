@@ -1,0 +1,21 @@
+@import 'tailwindcss';
+
+@source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
+@source '../../storage/framework/views/*.php';
+@source '../**/*.blade.php';
+@source '../**/*.js';
+
+/* @import "../icon/myicon.css" */
+
+/* Aktifkan dark mode berbasis class `.dark` */
+/* @variant dark (&:where(.dark, .dark *)); */
+/* @media (prefers-color-scheme: dark) {
+  .bg-base {
+    background-color: var(--color-background-dark);
+  }
+  .text-base {
+    color: var(--color-text-dark);
+  }
+} */
+@variant dark (&:where(.dark, .dark *));
+@custom-variant dark (&:where(.dark, .dark *));
