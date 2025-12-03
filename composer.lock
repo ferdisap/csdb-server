@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "8fe843abb95d5d7c4483c81eee4d9df7",
+    "content-hash": "911ed50d5248c2b8727a0ecfe235a661",
     "packages": [
         {
             "name": "ankitpokhrel/tus-php",
@@ -352,17 +352,19 @@
             "dist": {
                 "type": "path",
                 "url": "../../lib/csdb_lib/dochub",
-                "reference": "73b69085db23ce973e8ae3e7cc808b17bbff5cb5"
+                "reference": "3f099f36586946a38f88a0eb59302eccda6b6358"
             },
             "require": {
                 "ankitpokhrel/tus-php": "^2.4",
                 "illuminate/console": "*",
                 "illuminate/database": "*",
+                "illuminate/filesystem": "^12.40",
                 "illuminate/http": "*",
                 "illuminate/queue": "^12.40",
                 "illuminate/support": "*",
                 "laravel-zero/foundation": "^12.40",
                 "php": "^8.1",
+                "predis/predis": "^2.4",
                 "sebastian/diff": "*"
             },
             "type": "library",
@@ -9963,7 +9965,9 @@
     ],
     "aliases": [],
     "minimum-stability": "dev",
-    "stability-flags": {},
+    "stability-flags": {
+        "dochub/workspace": 20
+    },
     "prefer-stable": true,
     "prefer-lowest": false,
     "platform": {

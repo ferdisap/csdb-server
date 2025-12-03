@@ -1,3 +1,5 @@
+const isDev = false; // tidak check chunk jika isDev = true
+
 interface UploadConfig {
   driver: string;
   environment: string;
@@ -16,7 +18,9 @@ interface ChunkMetadata {
   createdAt: number;
 }
 
-export type UploadStatus = "uploaded" | "error" | "success";
+// uploading, processing, uploaded => di controller
+// processing, completed, failed => di process zip job
+export type UploadStatus = "uploaded" | "processing" | "failed" | "completed";
 
 export interface StartData {
   uploadId: string;
@@ -31,6 +35,16 @@ export interface ProgressData extends StartData {
   chunkSize: number; // bytes
   uploadedSize: number; // total bytes chunk uploaded
   status: UploadStatus; // eg: uploaded
+}
+
+export interface UploadedData extends StartData {
+  status: UploadStatus; // eg: uploaded
+}
+
+export interface ProcessedData extends StartData {
+  jobId: string,
+  status: UploadStatus;
+  url?: string | null;
 }
 
 export interface EndData extends StartData {
@@ -292,10 +306,10 @@ export class ChunkedUploadManager {
     };
 
     const startData = {
-      fileName: file.name,
-      totalChunks: totalChunks,
-      totalBytes: file.size,
       uploadId: this.uploadId,
+      fileName: file.name,
+      totalBytes: file.size,
+      totalChunks: totalChunks,
     };
     if (this.onStart) {
       this.onStart(startData);
@@ -326,14 +340,11 @@ export class ChunkedUploadManager {
         if (this.onProgress) {
           const progressData = {
             // start data
-            fileName: file.name,
+            ...startData,
+            // progress data
             chunkId: id,
             chunkIndex: i,
-            totalChunks: totalChunks,
-            // progress data
             chunkSize: size,
-            totalBytes: file.size,
-            uploadId: this.uploadId,
             uploadedSize: uploadedSize,
             status: status,
           };
@@ -343,23 +354,23 @@ export class ChunkedUploadManager {
         if (this.onError) {
           this.onError({
             // start data
-            fileName: file.name,
-            chunkId: id!,
-            chunkIndex: i,
-            totalChunks: totalChunks,
+            ...startData,
             // progress data
             chunkSize: size!,
             totalBytes: file.size,
             uploadId: this.uploadId,
             uploadedSize: uploadedSize,
-            status: "error",
+            status: "failed",
             error: e as Error,
           });
         }
         throw e;
       }
     }
-
+    // dispatch event
+    if (this.onUploaded) {
+      this.onUploaded({ ...startData, status: "uploaded" });
+    }
     await this.waitController.wait();
     // Trigger processing
     let jobId: string;
@@ -367,10 +378,13 @@ export class ChunkedUploadManager {
     let status: UploadStatus;
     try {
       ({ jobId, url, status } = await this.triggerProcessing());
+      if (status === 'processing' && this.onProcessed) {
+        this.onProcessed({ ...startData, status, jobId, url });
+      }
+      else if (status === 'completed' && this.onEnd) {
+        this.onEnd({ ...startData, jobId, status, url });
+      }
     } catch (e) {
-      jobId = "";
-      url = "";
-      status = "error";
 
       if (this.onError) {
         this.onError({
@@ -378,22 +392,15 @@ export class ChunkedUploadManager {
           totalBytes: file.size,
           uploadId: this.uploadId,
           uploadedSize: uploadedSize,
-          status: status,
+          status: "failed",
           error: e as Error,
         });
       }
     }
-    if (this.onEnd) {
-      this.onEnd({
-        ...startData,
-        jobId,
-        url,
-        status,
-      });
-    }
 
+    const uploadId = this.uploadId;
     this.initialize();
-    return this.uploadId;
+    return uploadId;
   }
 
   /**
@@ -457,13 +464,6 @@ export class ChunkedUploadManager {
     totalChunks: number
   ): Promise<{ id: string; size: number; status: UploadStatus }> {
 
-    // try {
-    //   await this.waitController.wait();
-    // } catch (error) {
-    //   console.log("cancel await on upload chunk");
-    //   throw error;
-    // }
-
     const start = chunkIndex * this.metadata!.chunkSize;
     const end = Math.min(
       start + this.metadata!.chunkSize,
@@ -478,15 +478,17 @@ export class ChunkedUploadManager {
     let response: Response;
     try {
       // 🔑 Check the chunk
-      try {
-        let responseCheckChunk: number = await this.checkChunk(chunkId);
-        // console.log(responseCheckChunk);
-        if (responseCheckChunk === 304) {
-          return { id: chunkId, size: chunkSize, status: "uploaded" };
+      if(!isDev){
+        try {
+          let responseCheckChunk: number = await this.checkChunk(chunkId);
+          // console.log(responseCheckChunk);
+          if (responseCheckChunk === 304) {
+            return { id: chunkId, size: chunkSize, status: "uploaded" };
+          }
+        } catch (error) {
+          // console.error(error);
+          throw error;
         }
-      } catch (error) {
-        // console.error(error);
-        throw error;
       }
 
       // 🔑 Pakai fetch dengan Blob + custom headers
@@ -507,6 +509,14 @@ export class ChunkedUploadManager {
         body: chunk, // 🔑 Langsung kirim Blob
         signal: this.abortController ? this.abortController.signal : null,
       });
+
+      // jika response status 429 (too many attempt karena middleware throtle),
+      // 1. ambil response header X-Ratelimit-Reset (limitResetTime)
+      // 2. to = Math.abs((limitResetTime * 1000) - Date.now());
+      // 3. setTimeout dengan to
+      // atau
+      // 1. ambil response header Retry-After (in seconds)
+      // 2. setTimeout (retryAfter * 1000) karena perlu milisecond
     } catch (error) {
       if ((error as Error).name === "AbortError") {
         throw new Error("Upload Error");
@@ -549,6 +559,7 @@ export class ChunkedUploadManager {
     const response = await fetch(`${this.endpoint}/process`, {
       method: "POST",
       headers: {
+        "X-Requested-With": "XMLHttpRequest",
         "Content-Type": "application/json",
         "X-CSRF-TOKEN": getCSRFToken(),
       },
@@ -563,12 +574,11 @@ export class ChunkedUploadManager {
     }
 
     const result = await response.json();
-    // this._result.process = result;
 
     return {
-      jobId: result.jobId,
+      jobId: result.job_id,
       url: result.url,
-      status: result.status || "success",
+      status: result.status || "completed",
     };
   }
 
@@ -580,16 +590,33 @@ export class ChunkedUploadManager {
    * Cek status upload
    */
   async getStatus(uploadId: string): Promise<any> {
-    const response = await fetch(`${this.endpoint}/${uploadId}/status`);
+    const response = await fetch(`${this.endpoint}/${uploadId}/status`, {
+      headers: {
+        "X-Requested-With": "XMLHttpRequest",
+      }
+    });
     if (!response.ok) {
       throw new Error(`Status check failed: ${response.status}`);
     }
-    return response.json();
+
+    const data = await response.json() as Record<string, any>;
+    if (data.status === 'completed' && this.onEnd) {
+      const startData = {
+        uploadId,
+        fileName: data.file_name,
+        totalBytes: data.file_size,
+        totalChunks: data.total_chunks,
+      };
+      this.onEnd({...startData, jobId: data.job_id, url: data.url, status: data.status});
+    }
+    return data;
   }
 
   // Callbacks
   onStart?: (data: StartData) => void;
   onProgress?: (data: ProgressData) => void;
+  onUploaded?: (data: UploadedData) => void;
+  onProcessed?: (data: ProcessedData) => void;
   onEnd?: (data: EndData) => void;
   onError?: (data: ErrorData) => void;
 
@@ -636,6 +663,7 @@ export function getCSRFToken(): string {
 //   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 // }
 
+
 export function formatBytes(bytes: number): string {
   if (bytes === 0) return "0 Bytes";
 
@@ -647,3 +675,46 @@ export function formatBytes(bytes: number): string {
 
   return `${formatted} ${units[i]}`;
 }
+
+export function formatDuration(ms:number) {
+  const totalSeconds = ms / 1000;
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = Number((totalSeconds % 60).toFixed(2));
+
+  const parts = [];
+
+  if (hours > 0) {
+    parts.push(`${hours} hour${hours !== 1 ? 's' : ''}`);
+  }
+  if (minutes > 0) {
+    parts.push(`${minutes} minute${minutes !== 1 ? 's' : ''}`);
+  }
+  if (seconds > 0 || parts.length === 0) { // Include seconds if there are no hours/minutes, or if seconds are present
+    parts.push(`${seconds} second${seconds !== 1 ? 's' : ''}`);
+  }
+
+  if (parts.length === 0) {
+    return "0 seconds"; // Handle the case of 0 seconds explicitly
+  } else if (parts.length === 1) {
+    return parts[0];
+  } else if (parts.length === 2) {
+    return `${parts[0]} and ${parts[1]}`;
+  } else {
+    // For three parts (hours, minutes, seconds)
+    const lastPart = parts.pop();
+    return `${parts.join(', ')}, and ${lastPart}`;
+  }
+}
+
+// Examples:
+// console.log(formatDuration(0));        // Output: 0 seconds
+// console.log(formatDuration(1));        // Output: 1 second
+// console.log(formatDuration(60));       // Output: 1 minute
+// console.log(formatDuration(61));       // Output: 1 minute and 1 second
+// console.log(formatDuration(3600));     // Output: 1 hour
+// console.log(formatDuration(3601));     // Output: 1 hour and 1 second
+// console.log(formatDuration(3661));     // Output: 1 hour, 1 minute, and 1 second
+// console.log(formatDuration(7200));     // Output: 2 hours
+// console.log(formatDuration(7260));     // Output: 2 hours and 1 minute
+// console.log(formatDuration(12345));    // Output: 3 hours, 25 minutes, and 45 seconds
