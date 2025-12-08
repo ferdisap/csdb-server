@@ -7,7 +7,10 @@
     "jsx": "preserve",
     "allowJs": false,
     "esModuleInterop": true,
-    "types": ["vite/client"],
+    "types": [
+      "vite/client",
+      "@types/wicg-file-system-access"
+    ],
     "baseUrl": ".",
     "paths": {
       "@shadcn/*": ["./resources/shadcn/*"]
