@@ -62,10 +62,20 @@ function deleteToken(deletedToken:token){
       <td>:</td>
       <td>{{ props.token.provider }}</td>
     </tr>
-    <tr>
+    <tr v-if="!props.token.savedToken">
       <td>Token (hashed)</td>
       <td>:</td>
       <td>{{ props.token.access_token }}</td>
+    </tr>
+    <tr v-else="props.token.savedToken">
+      <td>Access Token</td>
+      <td>:</td>
+      <td>{{ props.token.savedToken.access_token }}</td>
+    </tr>
+    <tr v-if="props.token.savedToken">
+      <td>Refresh Token</td>
+      <td>:</td>
+      <td>{{ props.token.savedToken.refresh_token }}</td>
     </tr>
     <tr>
       <td>Revoked</td>

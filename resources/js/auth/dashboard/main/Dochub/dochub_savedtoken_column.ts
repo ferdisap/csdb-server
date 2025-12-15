@@ -4,14 +4,14 @@ import { DateTime } from '../../../../utils/datetime';
 import axios from 'axios';
 import { goto } from '../../router';
 
-export interface token {
+export interface SavedToken {
   id: string,
   access_token: string,
   refresh_token: string,
   expired: DateTime,
 }
 
-export function castToToken(data: any): token {
+export function castToToken(data: any): SavedToken {
   return {
     id: data.id,
     access_token: data.access_token,
@@ -25,7 +25,7 @@ export const columns_token = (onClickColumnId: (e: PointerEvent, row: RowModel<R
     {
       accessorKey: 'id',
       header: () => h('div', { class: 'text-left' }, 'ID'),
-      cell: ({ row }: { row: Row<token> }) => {
+      cell: ({ row }: { row: Row<SavedToken> }) => {
         const value = row.getValue('id') as string;
         return h('div', { class: 'text-center font-medium' }, value);
       },
@@ -34,7 +34,7 @@ export const columns_token = (onClickColumnId: (e: PointerEvent, row: RowModel<R
     {
       accessorKey: 'access_token',
       header: () => h('div', { class: 'text-center' }, 'Access Token'),
-      cell: ({ row }: { row: Row<token> }) => {
+      cell: ({ row }: { row: Row<SavedToken> }) => {
         const value = row.getValue('access_token') as string;
         return h('div', { class: 'text-center font-medium' }, value);
       },
@@ -43,7 +43,7 @@ export const columns_token = (onClickColumnId: (e: PointerEvent, row: RowModel<R
     {
       accessorKey: 'refresh_token',
       header: () => h('div', { class: 'text-center' }, 'Refresh Token'),
-      cell: ({ row }: { row: Row<token> }) => {
+      cell: ({ row }: { row: Row<SavedToken> }) => {
         const value = row.getValue('refresh_token') as string;
         return h('div', { class: 'text-center font-medium' }, value);
       },
@@ -52,7 +52,7 @@ export const columns_token = (onClickColumnId: (e: PointerEvent, row: RowModel<R
     {
       accessorKey: 'expired',
       header: () => h('div', { class: 'text-right' }, 'Expired'),
-      cell: ({ row }: { row: Row<token> }) => {
+      cell: ({ row }: { row: Row<SavedToken> }) => {
         let value = row.getValue('expired');
         if (value instanceof DateTime) {
           value = value.toString();
@@ -74,7 +74,7 @@ const owner = {
   "name": "Nami",
   "email": "nami@example.com"
 }
-export const data_dummy: token[] = [
+export const data_dummy: SavedToken[] = [
   {
     "id": '1',
     "access_token": "7d9bbdfffccffa0632e60c9ede522004972de228125610e0ebf70bc8a16de84c",
@@ -89,7 +89,7 @@ export const data_dummy: token[] = [
   },
 ]
 
-const data = ref<Array<token>>([]);
+const data = ref<Array<SavedToken>>([]);
 
 export function useDataTokens() {
 
@@ -97,22 +97,22 @@ export function useDataTokens() {
     // Fetch data from your API here.
     // return data_dummy;
     const response = await axios.get("/dochub/token/list-saved");
-    const tokens: token[] = (response.data.tokens as Array<{}>).map(o => castToToken(o));
+    const tokens: SavedToken[] = (response.data.tokens as Array<{}>).map(o => castToToken(o));
     // tokens.forEach(v => data.push(v))
     data.value = tokens;
-    return tokens as Array<token>;
+    return tokens as Array<SavedToken>;
   }
 
-  function addData(newClient: token) {
+  function addData(newClient: SavedToken) {
     const newData = Object.assign([], data.value);
     newData.push(newClient);
     assignData(newData);
   }
 
-  function updateData(newClient: token) {
-    // update data token
+  function updateData(newClient: SavedToken) {
+    // update data SavedToken
     const id = newClient.id;
-    const index = data.value.findIndex((ct: token) => ct.id === id);
+    const index = data.value.findIndex((ct: SavedToken) => ct.id === id);
     if (index >= 0) {
       data.value[index] = newClient;
       // replace data with new assigned
@@ -120,16 +120,16 @@ export function useDataTokens() {
     }
   }
 
-  function deleteData(deletedClient: token) {
+  function deleteData(deletedClient: SavedToken) {
     const id = deletedClient.id;
-    const index = data.value.findIndex((ct: token) => ct.id === id);
+    const index = data.value.findIndex((ct: SavedToken) => ct.id === id);
     if (index >= 0) {
       data.value.splice(index, 1);
       assignData();
     }
   }
 
-  function assignData(tokens: Array<token> | null = null) {
+  function assignData(tokens: Array<SavedToken> | null = null) {
     // replace data with new assigned
     let newData = tokens ? tokens : Object.assign([], data.value);
     data.value = newData;

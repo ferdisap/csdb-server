@@ -3,6 +3,7 @@ import { h, Reactive, reactive, ref } from 'vue';
 import { DateTime } from '../../../../utils/datetime';
 import axios from 'axios';
 import { goto } from '../../router';
+import { SavedToken } from './dochub_savedtoken_column';
 
 export interface token {
   id: string,
@@ -10,6 +11,7 @@ export interface token {
   access_token: string,
   revoked: boolean | number,
   expired: DateTime,
+  savedToken: null | SavedToken
 }
 
 export function castToToken(data: any): token {
@@ -19,6 +21,7 @@ export function castToToken(data: any): token {
     access_token: data.access_token,
     revoked: data.revoked,
     expired: DateTime.cast(data.expires_at, 'MMMM Do YYYY, h:mm'),
+    savedToken: data.saved_token || null
   }
 }
 
