@@ -352,7 +352,7 @@
             "dist": {
                 "type": "path",
                 "url": "../../lib/csdb_lib/dochub",
-                "reference": "3f099f36586946a38f88a0eb59302eccda6b6358"
+                "reference": "eee166d7122799fc30450ac49fd2d223a8ba6e25"
             },
             "require": {
                 "ankitpokhrel/tus-php": "^2.4",
@@ -362,9 +362,9 @@
                 "illuminate/http": "*",
                 "illuminate/queue": "^12.40",
                 "illuminate/support": "*",
+                "james-heinrich/getid3": "^1.9",
                 "laravel-zero/foundation": "^12.40",
                 "php": "^8.1",
-                "predis/predis": "^2.4",
                 "sebastian/diff": "*"
             },
             "type": "library",
@@ -382,7 +382,9 @@
                 "psr-4": {
                     "Dochub\\Workspace\\": "src/workspace",
                     "Dochub\\Upload\\": "src/upload",
+                    "Dochub\\Encryption\\": "src/encryption",
                     "Dochub\\Controller\\": "controllers/",
+                    "Dochub\\Middleware\\": "middlewares/",
                     "Dochub\\Job\\": "jobs/"
                 }
             },

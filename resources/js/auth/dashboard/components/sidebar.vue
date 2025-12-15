@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Calendar, FolderOpenDot, HardDrive, Home, Inbox, Key, LockKeyhole, Search, Settings, Trash2, Type, User } from "lucide-vue-next"
+import { Calendar, FolderOpenDot, HardDrive, Home, Inbox, Key, List, LockKeyhole, Search, Settings, Trash2, Type, User } from "lucide-vue-next"
 import {
   Sidebar,
   SidebarContent,
@@ -63,6 +63,26 @@ const items_csdb = [
   },
 ]
 
+const items_dochub = [
+  {
+    title: "Dochub",
+    url: "#",
+    icon: Key,
+    sub_items: [
+      {
+        title: "Token",
+        url: "/dashboard/dochub/token",
+        icon: List,
+      },
+      // {
+      //   title: "Token-self",
+      //   url: "/dashboard/dochub/saved-token",
+      //   icon: List,
+      // }
+    ]
+  },
+]
+
 const router = useRouter();
 function goto(url: string) {
   router.push(url);
@@ -110,6 +130,30 @@ const { open } = useSidebar();
         <SidebarGroupContent>
           <SidebarMenu>
             <SidebarMenuItem v-for="item in items_csdb" :key="item.title">
+              <SidebarMenuButton asChild>
+                <a :href="item.url" @click.prevent="goto(item.url)">
+                  <component :is="item.icon" />
+                  <span>{{ item.title }}</span>
+                </a>
+              </SidebarMenuButton>
+              <SidebarMenuSub v-for="subitem in item.sub_items" :key="subitem.title">
+                <SidebarMenuSubItem>
+                  <SidebarMenuSubButton asChild>
+                    <a :href="subitem.url" @click.prevent="goto(subitem.url)">
+                      <component :is="subitem.icon" />
+                      <span>{{ subitem.title }}</span>
+                    </a>
+                  </SidebarMenuSubButton>
+                </SidebarMenuSubItem>
+              </SidebarMenuSub>
+            </SidebarMenuItem>
+          </SidebarMenu>
+        </SidebarGroupContent>
+        <Separator />
+        <SidebarGroupLabel>Dochub</SidebarGroupLabel>
+        <SidebarGroupContent>
+          <SidebarMenu>
+            <SidebarMenuItem v-for="item in items_dochub" :key="item.title">
               <SidebarMenuButton asChild>
                 <a :href="item.url" @click.prevent="goto(item.url)">
                   <component :is="item.icon" />

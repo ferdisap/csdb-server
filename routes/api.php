@@ -15,4 +15,4 @@ Route::get('/user', function (Request $request) {
   return $request->user();
 })->middleware('auth:api');
 
-require __DIR__ . "/../resources/views/upload-encrypt/routes.php";
+// require __DIR__ . "/../resources/views/upload-encrypt/routes.php";

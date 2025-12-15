@@ -8,6 +8,7 @@ import OAuthToken from './main/OAuthToken/index.vue';
 import CObject from './main/CObject/index.vue';
 import CObject_Create from './main/CObject/Create.vue';
 import Trash from './main/CObject/trash/index.vue';
+import Dochub from './main/Dochub/index.vue';
 
 const routes = [
   // biodata
@@ -21,7 +22,9 @@ const routes = [
   { path: '/dashboard/csdb-object/trash/:filename?', name: 'Trash CSDB Object Index', component: Trash },
   { path: '/dashboard/csdb-object/:filename?', name: 'CSDB Object Index', component: CObject },
   { path: '/dashboard/csdb-object/create', name: 'CSDB Object Create', component: CObject_Create },
-
+  // dochub
+  { path: '/dashboard/dochub/token', name: 'Dochub Token Index', component: Dochub },
+  { path: '/dashboard/dochub/token/:id', name: 'Dochub Token Detail', component: Dochub },
 ]
 
 const dashboard_router = createRouter({

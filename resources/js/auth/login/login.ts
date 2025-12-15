@@ -1,9 +1,9 @@
 import { createApp } from 'vue'
 import App from './login.vue';
-import axios from 'axios';
-import { api, set_default_setting_axios } from '../../utils/fetch';
+// import axios from 'axios';
+// import { api, set_default_setting_axios } from '../../utils/fetch';
 // import { CSRF_URI } from 'resources/js/config/app.config';
-import { getCookie } from 'resources/js/utils/helper';
+// import { getCookie } from 'resources/js/utils/helper';
 // import router from './router'
 
 

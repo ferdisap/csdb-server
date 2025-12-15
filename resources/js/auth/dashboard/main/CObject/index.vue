@@ -11,7 +11,7 @@ import {
     castToCObject,
     type cobject,
     columns_cobject,
-    data_dummy,
+    // data_dummy,
 } from "./cobject_column";
 import axios from "axios";
 import { CodeEditor } from "monaco-editor-vue3";

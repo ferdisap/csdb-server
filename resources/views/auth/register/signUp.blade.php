@@ -13,7 +13,7 @@
     <!-- <link href="https://fonts.bunny.net/css?family=instrument-sans:400,500,600" rel="stylesheet" /> -->
 
     <!-- Styles / Scripts -->
-    @vite(['resources/js/auth/register/register.ts', "resources/css/auth/login.css", 'resources/css/app.css', 'resources/css/icon/myicon.css'])
+    @vite(['resources/js/auth/register/register.ts', "resources/css/auth/login.css", 'resources/css/app.css'])
 </head>
 
 <body id="body"></body>
